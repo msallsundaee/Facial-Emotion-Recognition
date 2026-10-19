@@ -7,15 +7,15 @@ Team members and actual roles: [Enter the work completed by each member]
 
 ## Objective
 
-This activity used FER2013 to classify seven facial expressions. I followed Track B, using MobileNetV2 to extract features and Logistic Regression and Linear SVM to predict the labels.
+This activity focused on classifying seven facial expressions using FER2013. It followed Track B, where MobileNetV2 extracts image features and Logistic Regression and Linear SVM use those features to predict a label. Comparing the two models helps show how well the same features work with different classifiers.
 
 ## Dataset and train-test verification
 
-I used the public FER2013 dataset from Kaggle. It contained 28,709 training images and 7,178 test images. All images were readable and had a size of 48×48 pixels.
+The public FER2013 dataset from Kaggle contained 28,709 training images and 7,178 test images. All images were readable and measured 48×48 pixels. Checking the image sizes and class folders helped confirm that the dataset matched the laboratory requirements.
 
-I excluded 1,797 training images: 703 matched test images, 73 had conflicting training labels, and 1,021 were extra copies. This left 26,912 training images. The original files were kept.
+A total of 1,797 images were excluded from training: 703 matched test images, 73 had conflicting training labels, and 1,021 were extra copies. This left 26,912 training images. Removing these copies helps prevent the model from being tested on an exact image it already learned from, while the original files remain unchanged.
 
-All 7,178 test images were kept. This set includes both PublicTest and PrivateTest images. Test labels were not used to train or choose the models.
+All 7,178 test images were kept, including both PublicTest and PrivateTest images. Their labels were not used to train or choose the models, so they could be used for the final evaluation.
 
 
 | Expression | Original training | Retained training | Test |
@@ -30,9 +30,9 @@ All 7,178 test images were kept. This set includes both PublicTest and PrivateTe
 | Total | 28709 | 26912 | 7178 |
 
 
-I used 21,529 images for fitting and 5,383 for validation, with seed 42. After choosing the model using validation results, both models were trained again on all 26,912 retained training images.
+The retained training data was divided into 21,529 fitting images and 5,383 validation images, using seed 42. The validation set helped choose between the models before looking at test scores. Both models were then trained again on all 26,912 retained training images.
 
-Some classes had more images than others. For example, happy had 7,030 training images, while disgust had only 350. I included macro-F1 because it gives each class equal weight.
+The classes were not equally represented. Happy had 7,030 training images, while disgust had only 350. Macro-F1 was included because it gives each class equal weight, making weak performance on smaller classes easier to notice.
 
 [Figure file: figures/class_samples.png — FER2013 samples from all seven expression classes]
 
@@ -40,11 +40,11 @@ Some classes had more images than others. For example, happy had 7,030 training 
 
 ## Milestone 1 Face detection and visual inspection
 
-I used OpenCV’s Haar detector to find faces. Images were enlarged to 192 pixels for detection, and the largest box was used for cropping. The settings were scale factor 1.1, minimum neighbors 5, and minimum face size 30×30.
+OpenCV’s Haar detector was used to locate faces before feature extraction. Images were enlarged to 192 pixels for detection, and the largest returned box was used for cropping. The settings were scale factor 1.1, minimum neighbors 5, and minimum face size 30×30.
 
-The detector returned boxes for 54.83% of training images and 55.88% of test images. When no box was found, I used the whole image because FER2013 images were already cropped around faces. This fallback was used for 44.95% of all processed images.
+The detector returned boxes for 54.83% of training images and 55.88% of test images. When no box was found, the whole image was used because FER2013 images were already cropped around faces. This fallback kept those images in the experiment and was needed for 44.95% of all processed images.
 
-These rates show how often a box was returned, not how accurate it was. Some boxes were incorrect, such as the box around only the mouth in one disgust image.
+These rates show how often the detector returned a box, not whether every box was correct. For example, one disgust image had a box around only the mouth. A crop like this may leave out useful facial details, although its effect on the final scores was not measured separately.
 
 [Figure file: figures/face_detection.png — Haar candidate boxes and explicitly labeled detection fallbacks]
 
@@ -52,22 +52,22 @@ These rates show how often a box was returned, not how accurate it was. Some box
 
 ## Milestone 2 Feature extraction and model training
 
-I resized each crop to 224×224 and repeated the grayscale channel to make three channels. MobileNetV2 preprocessing scaled the pixels to −1 to 1. I used frozen ImageNet weights, removed the classification head, and applied global average pooling; I did not train the CNN.
+Each crop was resized to 224×224, and its grayscale channel was repeated to make the three channels expected by MobileNetV2. Pixel values were scaled to −1 to 1 using the model’s preprocessing function. The ImageNet weights stayed frozen, with the classification head removed and global average pooling applied, so the CNN served as a feature extractor rather than being trained again.
 
-MobileNetV2 produced 1,280 features per image. The feature shapes were (26,912, 1,280) for training and (7,178, 1,280) for testing. I processed batches of 32 and saved the features for reuse.
+MobileNetV2 represented each image using 1,280 numerical features. These became the inputs to the two classifiers, giving feature shapes of (26,912, 1,280) for training and (7,178, 1,280) for testing. Processing batches of 32 and saving the features allowed them to be reused without repeating extraction.
 
 Two models were trained on the same features and partitions:
 
 1. Logistic Regression: StandardScaler, C=1.0, lbfgs solver, up to 5,000 iterations, and seed 42.
 2. Linear SVM: StandardScaler, C=1.0, squared-hinge loss, L2 regularization, dual='auto', up to 20,000 iterations, and seed 42.
 
-Both models used StandardScaler without class weighting. The scaler learned only from the training portion, so validation and test data did not affect scaling.
+Both models used StandardScaler to put the feature values on comparable scales, without class weighting. The scaler learned only from the training portion. This kept validation and test information from influencing the scaling step.
 
-I selected Logistic Regression because its validation macro-F1 was 0.4030, slightly higher than SVM’s 0.4000. The test scores were not used to make this choice.
+Logistic Regression was selected because its validation macro-F1 was 0.4030, slightly higher than SVM’s 0.4000. Macro-F1 was the chosen criterion because the dataset has unequal class sizes. The test scores were not used for this decision.
 
 ## Milestone 3 Evaluation
 
-I tested both models on the same 7,178 images. Accuracy is shown as a percentage, while the macro scores use a 0–1 scale and give equal weight to each class.
+Both models were evaluated on the same 7,178 test images to make the comparison consistent. Accuracy shows the overall proportion of correct predictions. The macro scores use a 0–1 scale and average the results equally across the seven classes.
 
 
 | Model | Accuracy (%) | Macro-precision | Macro-recall | Macro-F1 |
@@ -76,7 +76,7 @@ I tested both models on the same 7,178 images. Accuracy is shown as a percentage
 | Linear SVM | 47.98 | 0.4133 | 0.4202 | 0.4095 |
 
 
-SVM correctly classified 3,444 images, while Logistic Regression correctly classified 3,429. SVM had slightly higher accuracy, but Logistic Regression had higher macro-F1.
+SVM correctly classified 3,444 images, compared with 3,429 for Logistic Regression. Although SVM had slightly higher accuracy, Logistic Regression had higher macro-F1. This shows why overall accuracy alone does not fully describe performance across all classes.
 
 ### Per-class classification reports
 
@@ -160,9 +160,9 @@ Rows represent true labels and columns represent predicted labels. Entries are i
 
 ### Confusion-matrix interpretation
 
-Logistic Regression most often confused sad with neutral, with 253 cases. It also predicted fear as sad in 209 cases and sad as happy in 186 cases. The matrix shows these mistakes but does not explain their exact causes.
+Logistic Regression most often predicted sad as neutral, with 253 cases. It also predicted fear as sad in 209 cases and sad as happy in 186 cases. These patterns show difficulty separating the labeled expressions, but the matrix alone cannot explain the exact cause of each mistake.
 
-SVM also most often confused sad with neutral, with 267 cases. It predicted sad as happy in 220 cases and neutral as happy in 219 cases. It recognized more happy images correctly but had lower F1 for disgust and fear than Logistic Regression.
+SVM also most often predicted sad as neutral, with 267 cases. It predicted sad as happy in 220 cases and neutral as happy in 219 cases. SVM recognized more happy images correctly, but its lower F1 for disgust and fear helps explain why its macro-F1 was below Logistic Regression’s.
 
 [Figure file: figures/logistic_regression_errors.png — Misclassified test images from Logistic Regression]
 
@@ -191,16 +191,16 @@ The table and points below summarize the two models.
 
 ## Simple deployment and prediction proof
 
-The predict_emotion function uses the same preprocessing and features as training, then predicts a label using the saved Logistic Regression model. It also shows whether a face was detected or the full image was used.
+The predict_emotion function applies the same preprocessing and feature extraction used during training, then returns a label from the saved Logistic Regression model. Keeping these steps the same helps avoid differences between training and prediction. The output also records whether a face box or the full image was used.
 
-I demonstrated the function on two test images that were not used for training or model selection. They were selected without checking whether the predictions would be correct.
+The function was demonstrated on two test images that were not used for training or model selection. They were selected without checking whether the predictions would be correct, allowing the demonstration to show actual behavior rather than only successful examples.
 
 | Filename | True label | Predicted label | Preprocessing | Outcome |
 |---|---|---|---|---|
 | PrivateTest_10131363.jpg | angry | angry | Detected face crop | Correct |
 | PrivateTest_11895083.jpg | disgust | fear | Full-image fallback | Incorrect |
 
-The angry image was predicted correctly, but the disgust image was predicted as fear. Reloading the saved model gave the same results. This shows that the function works, although it still makes mistakes.
+The angry image was classified correctly, while the disgust image was predicted as fear. Reloading the saved model produced the same results, confirming that the saved pipeline could reproduce these predictions. The incorrect example also shows that a working prediction function does not guarantee a correct label.
 
 [Figure file: figures/prediction_demo.png — Two held-out predictions, one correct and one incorrect]
 
@@ -208,15 +208,15 @@ The angry image was predicted correctly, but the disgust image was predicted as 
 
 ## Reflection and limitations
 
-The activity showed that CNN features can be used with simple classifiers. However, the selected model reached only 47.77% accuracy, so it still needs improvement. Its labels describe facial expressions, not proof of what someone actually feels.
+The activity showed how pretrained CNN features can be combined with simple classifiers to build a facial-expression system. The selected model reached 47.77% accuracy, so many expressions were still misclassified. Its outputs describe dataset expression labels and should not be treated as proof of what a person actually feels.
 
-I removed exact training/test overlap, but similar images or the same people may still appear in both sets. The test set also has 86 repeated copies beyond unique images and four groups with conflicting labels. I used one random seed and did not test another dataset.
+Exact training/test overlap was removed, but similar images or the same people may still appear in both sets. The test set also contains 86 repeated copies beyond unique images and four groups with conflicting labels. Since the experiment used only one random seed and one dataset, its results do not show how well the system would perform in other settings.
 
-Possible improvements include better face detection, class weighting, and fine-tuning the CNN. These were not tested here. Any changes should be chosen using validation data, not the test results.
+Possible improvements include better face detection, class weighting to give smaller classes more attention, and fine-tuning the CNN for facial expressions. These ideas were not tested in this activity. They should be compared using validation data before making claims about improvement.
 
 ## Conclusion
 
-I completed the Track B pipeline and compared two classifiers. Logistic Regression was selected using validation macro-F1 and reached 47.77% test accuracy with a macro-F1 of 0.4182. The system can predict labels, but detection problems and classification errors remain.
+The Track B pipeline successfully extracted features, trained two classifiers, and produced predictions on test images. Logistic Regression was selected using validation macro-F1 and achieved 47.77% test accuracy with a macro-F1 of 0.4182. The results provide a starting point for facial-expression classification, while showing that face detection and recognition errors still need improvement.
 
 ## References
 
