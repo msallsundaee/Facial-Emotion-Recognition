@@ -24,6 +24,7 @@ import random
 import importlib.metadata
 import numpy as np
 import pandas as pd
+import cv2
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -42,8 +43,10 @@ import argparse
 def main():
     parser = argparse.ArgumentParser(description='Week 7 FER End-to-End Pipeline')
     parser.add_argument('--sample-limit', type=int, default=None,
-                        help='Limit number of samples per split for quick verification.')
+                        help='Approximate samples per split for a smoke check (at least 5 per class). Writes only to artifacts/smoke and outputs/smoke.')
     args = parser.parse_args()
+    if args.sample_limit is not None and args.sample_limit < 1:
+        parser.error('--sample-limit must be positive.')
 
     print("=== Week 7 Facial Emotion Recognition Pipeline ===")
     DATA_ROOT = Path(os.environ.get('FER_DATA_ROOT', ROOT / 'data')).expanduser()
@@ -51,6 +54,10 @@ def main():
     BATCH_SIZE = 32
     ARTIFACTS = ROOT / 'artifacts'
     OUTPUTS = ROOT / 'outputs'
+    if args.sample_limit is not None:
+        ARTIFACTS = ARTIFACTS / 'smoke'
+        OUTPUTS = OUTPUTS / 'smoke'
+        print('SMOKE CHECK ONLY: these outputs are not full-dataset laboratory results.')
 
     for folder in [ARTIFACTS / 'audit', ARTIFACTS / 'features', ARTIFACTS / 'models',
                    OUTPUTS / 'figures', OUTPUTS / 'metrics', OUTPUTS / 'submission']:
@@ -82,12 +89,16 @@ def main():
     print("Effective counts after deduplication policy:")
     print(effective_counts)
 
-    if args.sample_limit:
+    if args.sample_limit is not None:
         per_class = max(5, args.sample_limit // len(CLASSES))
         print(f"\n[NOTE] --sample-limit={args.sample_limit} specified: slicing {per_class} samples per class for test run.")
         train_rows = train_rows.groupby('label').head(per_class).reset_index(drop=True)
         test_rows = test_rows.groupby('label').head(per_class).reset_index(drop=True)
         print(f"Verification train rows: {len(train_rows)} | test rows: {len(test_rows)}")
+        (OUTPUTS / 'SMOKE_ONLY.txt').write_text(
+            f'Smoke check only: {len(train_rows)} training and {len(test_rows)} test images. '
+            'Audit counts describe the full source dataset, not these sampled model inputs. '
+            'Do not use these metrics in the full laboratory submission.\n')
 
     # Class sample grid
     fig = sample_grid(train_rows, per_class=3, seed=SEED)
@@ -136,7 +147,7 @@ def main():
     print("Saved deployment bundle -> artifacts/models/emotion_pipeline.joblib")
 
     # Step 6: Milestone 3 Test Evaluation
-    print("\n[6/7] Milestone 3: Evaluating models on unchanged test split...")
+    print("\n[6/7] Milestone 3: Evaluating models on the selected test rows...")
     test_scores, test_predictions = evaluate_models(models, X_test, test_rows, OUTPUTS / 'metrics')
     print("Final Test Metrics:")
     print(test_scores)
@@ -165,11 +176,13 @@ def main():
     fig.savefig(OUTPUTS / 'figures/prediction_demo.png', dpi=160, bbox_inches='tight')
     plt.close(fig)
 
-    summary_path = write_summary(test_scores, selected_name, OUTPUTS, ARTIFACTS / 'audit')
-    print(f"Generated comparative summary -> {summary_path}")
+    if args.sample_limit is None:
+        summary_path = write_summary(test_scores, selected_name, OUTPUTS, ARTIFACTS / 'audit')
+        print(f"Generated comparative summary -> {summary_path}")
+    else:
+        print('Smoke check complete; full-dataset submission summary intentionally not generated.')
     print("\n=== Pipeline Execution Successfully Completed! ===")
 
 
 if __name__ == '__main__':
-    import cv2
     main()
