@@ -1,0 +1,3 @@
+# Optional Track A dependency; the implemented Track B does not import MediaPipe.
+-r requirements.txt
+mediapipe>=0.10,<0.11
